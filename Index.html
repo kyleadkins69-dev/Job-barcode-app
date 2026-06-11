@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Job Tracking System</title>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+:root{
+  --primary:#0b5ed7;
+  --bg:#f4f6f9;
+  --card:#ffffff;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+}
+
+*{box-sizing:border-box;font-family:Segoe UI, Arial, sans-serif;}
+
+body{margin:0;background:var(--bg);color:var(--text);}
+
+/* HEADER */
+.header{
+  background:#fff;
+  border-bottom:1px solid var(--border);
+  padding:12px 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.header img{height:34px;}
+.header .title{font-weight:600;font-size:14px;}
+
+/* LAYOUT */
+.container{max-width:520px;margin:30px auto;padding:0 16px;}
+
+.screen{display:none;}
+.active{display:block;}
+
+.card{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:20px;
+  box-shadow:0 2px 6px rgba(0,0,0,.04);
+}
+
+label{display:block;font-size:13px;color:var(--muted);margin-top:14px;margin-bottom:6px;}
+
+input,select{
+  width:100%;
+  padding:12px;
+  font-size:15px;
+  border:1px solid var(--border);
+  border-radius:8px;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  border-radius:8px;
+  border:none;
+  font-weight:600;
+  font-size:14px;
+  cursor:pointer;
+  margin-top:10px;
+}
+
+.primary{background:#e83d30;color:#fff;}
+.secondary{background:#f3f4f6;border:1px solid var(--border);}
+
+/* BARCODE */
+.barcode-wrap{
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:18px;
+  margin-top:16px;
+  text-align:center;
+}
+.barcode-title{font-size:13px;color:var(--muted);}
+.barcode-value{font-size:20px;font-weight:600;margin:6px 0 10px;}
+svg{width:100%;}
+
+.nav{display:flex;gap:10px;}
+.nav button{flex:1;background:#f3f4f6;border:1px solid var(--border);}
+
+/* SCANNER */
+#scanner{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:#fff;
+  z-index:9999;
+  padding:12px;
+  overflow:auto;
+}
+
+#reader{
+  width:100%;
+  max-height:45vh;
+  overflow:hidden;
+  border-radius:10px;
+}
+
+#scanValue{
+  font-size:20px;
+  font-weight:600;
+  margin:16px 0;
+}
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <img src="https://hayley247.co.uk/wp-content/uploads/2024/03/hayley_247.svg">
+  <div class="title">Job Tracking System</div>
+</div>
+
+<div class="container">
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="screen active">
+  <div class="card">
+
+    <label>Username</label>
+    <input id="loginUser" placeholder="Username">
+
+    <label>Password</label>
+    <input id="loginPass" type="password" placeholder="Password">
+
+    <button class="primary" onclick="login()">Login</button>
+
+    <div id="loginError" style="color:red;font-size:12px;margin-top:10px;"></div>
+
+  </div>
+</div>
+
+<!-- SETUP -->
+<div id="setupScreen" class="screen">
+
+  <div class="card">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div id="userInfo" style="font-size:12px;color:#6b7280;"></div>
+      <button class="secondary" onclick="logout()" style="width:auto;padding:6px 10px;">Logout</button>
+    </div>
+
+    <label>Job Number</label>
+    <input id="jobNumber" placeholder="e.g. 123456/A">
+
+    <button type="button" class="secondary" onclick="startScan()">
+      Scan Job Number
+    </button>
+
+    <label>Task</label>
+    <select id="taskSelect"></select>
+
+    <button class="primary" onclick="generateSequence()">
+      Generate Barcodes
+    </button>
+
+  </div>
+
+</div>
+
+<!-- BARCODE -->
+<div id="barcodeScreen" class="screen">
+
+  <div class="card">
+
+    <div class="barcode-title" id="barcodeTitle"></div>
+    <div class="barcode-value" id="barcodeText"></div>
+
+    <div class="barcode-wrap">
+      <svg id="barcode"></svg>
+    </div>
+
+    <div class="nav">
+      <button onclick="prevBarcode()">◀ Previous</button>
+      <button onclick="nextBarcode()">Next ▶</button>
+    </div>
+
+    <button class="secondary" onclick="backToMenu()">New Job</button>
+
+  </div>
+
+</div>
+
+</div>
+
+<!-- SCANNER -->
+<div id="scanner">
+  <div id="reader"></div>
+
+  <div class="card">
+    <div style="font-size:12px;color:#6b7280;">Live Scan</div>
+    <div id="scanValue">Waiting for scan...</div>
+
+    <button id="acceptBtn" class="primary" onclick="acceptScan()" disabled>Accept Scan</button>
+    <button class="secondary" onclick="rescanScan()">Scan Again</button>
+    <button class="secondary" onclick="stopScan()">Cancel</button>
+  </div>
+</div>
+
+<script>
+
+/* USERS */
+const USERS = [
+  { username:"AdkinsK", password:"150698", userId:"KYLEAD" },
+  { username:"EvansR", password:"creamyfuckingpints", userId:"ROBERTEV" },
+  { username:"BaileyJ", password:"1709", userId:"JORDANBA" }
+];
+
+let currentUser = null;
+
+/* TASKS */
+const tasks=[
+{name:"Admin",code:"AD",needsJob:false},
+{name:"Breakdown",code:"BDOWN",needsJob:false},
+{name:"CAD",code:"PD",needsJob:false},
+{name:"Driving",code:"DR",needsJob:false},
+{name:"END",code:"END",needsJob:false},
+{name:"Housekeeping",code:"HK",needsJob:false},
+{name:"Inspection",code:"INSP",needsJob:true},
+{name:"Milling",code:"MILL",needsJob:true},
+{name:"Plant Repair",code:"PL",needsJob:false},
+{name:"Slotting",code:"SLOT",needsJob:true},
+{name:"Training",code:"TR",needsJob:false},
+{name:"Turning",code:"TURN",needsJob:true},
+{name:"Waiting Time",code:"WT",needsJob:false}
+];
+
+const taskSelect=document.getElementById("taskSelect");
+
+tasks.forEach(t=>{
+  const o=document.createElement("option");
+  o.value=t.name;
+  o.textContent=t.name;
+  taskSelect.appendChild(o);
+});
+
+let barcodeSequence=[];
+let currentIndex=0;
+
+/* SCREEN CONTROL */
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+/* LOGIN */
+function login(){
+  const u=document.getElementById("loginUser").value.trim();
+  const p=document.getElementById("loginPass").value.trim();
+
+  const found=USERS.find(x=>x.username===u && x.password===p);
+
+  if(!found){
+    document.getElementById("loginError").innerText="Invalid login";
+    return;
+  }
+
+  currentUser=found;
+  localStorage.setItem("loggedUser",JSON.stringify(found));
+
+  document.getElementById("userInfo").innerText=
+    "Logged in as: " + currentUser.userId;
+
+  showScreen("setupScreen");
+}
+
+/* LOGOUT */
+function logout(){
+  localStorage.removeItem("loggedUser");
+  currentUser=null;
+  showScreen("loginScreen");
+}
+
+/* INIT */
+window.onload=function(){
+
+  const saved=localStorage.getItem("loggedUser");
+
+  if(saved){
+    currentUser=JSON.parse(saved);
+    document.getElementById("userInfo").innerText=
+      "Logged in as: " + currentUser.userId;
+
+    showScreen("setupScreen");
+  } else {
+    showScreen("loginScreen");
+  }
+
+  const lastJob=localStorage.getItem("lastJob");
+  if(lastJob){
+    document.getElementById("jobNumber").value=lastJob;
+  }
+};
+
+/* BARCODE */
+function generateSequence(){
+  const task=tasks.find(t=>t.name===taskSelect.value);
+  const jobNumber=document.getElementById("jobNumber").value.trim();
+
+  if(!task) return alert("Select task");
+  if(task.needsJob && !jobNumber) return alert("Enter job number");
+
+  barcodeSequence=[{title:"Employee",value:currentUser.userId}];
+
+  if(task.needsJob){
+    barcodeSequence.push({title:"Job Number",value:jobNumber.toUpperCase()});
+  }
+
+  barcodeSequence.push({title:"Task",value:task.code});
+
+  currentIndex=0;
+  showScreen("barcodeScreen");
+  showBarcode();
+}
+
+function showBarcode(){
+  const item=barcodeSequence[currentIndex];
+
+  document.getElementById("barcodeTitle").innerText=item.title;
+  document.getElementById("barcodeText").innerText=item.value;
+
+  document.getElementById("barcode").innerHTML="";
+
+  JsBarcode("#barcode",item.value,{
+    format:"CODE39",
+    displayValue:false,
+    height:90,
+    width:2,
+    margin:10
+  });
+}
+
+function nextBarcode(){
+  if(currentIndex<barcodeSequence.length-1){
+    currentIndex++;
+    showBarcode();
+  }
+}
+
+function prevBarcode(){
+  if(currentIndex>0){
+    currentIndex--;
+    showBarcode();
+  }
+}
+
+function backToMenu(){
+  showScreen("setupScreen");
+}
+
+/* SCANNER */
+let html5QrCode;
+let lastScanValue="";
+let sameCount=0;
+let confirmedScan="";
+
+function startScan(){
+
+  document.getElementById("scanner").style.display="block";
+
+  lastScanValue="";
+  sameCount=0;
+  confirmedScan="";
+
+  document.getElementById("scanValue").innerText="Waiting for scan...";
+  document.getElementById("acceptBtn").disabled=true;
+
+  html5QrCode=new Html5Qrcode("reader");
+
+  Html5Qrcode.getCameras().then(devices=>{
+
+    let cameraId=devices[0].id;
+
+    const backCam=devices.find(d=>{
+      const label=(d.label||"").toLowerCase();
+      return label.includes("back")||label.includes("rear")||label.includes("environment");
+    });
+
+    if(backCam) cameraId=backCam.id;
+
+    html5QrCode.start(cameraId,{fps:10,qrbox:{width:240,height:360}},(decodedText)=>{
+
+      document.getElementById("scanValue").innerText=decodedText;
+
+      if(decodedText===lastScanValue){
+        sameCount++;
+      } else {
+        lastScanValue=decodedText;
+        sameCount=1;
+      }
+
+      if(sameCount>=3){
+        confirmedScan=decodedText;
+        document.getElementById("acceptBtn").disabled=false;
+      }
+
+    });
+
+  });
+}
+
+function acceptScan(){
+  document.getElementById("jobNumber").value=confirmedScan;
+  stopScan();
+}
+
+function rescanScan(){
+  lastScanValue="";
+  sameCount=0;
+  confirmedScan="";
+  document.getElementById("scanValue").innerText="Waiting for scan...";
+  document.getElementById("acceptBtn").disabled=true;
+}
+
+function stopScan(){
+  if(html5QrCode){
+    html5QrCode.stop().then(()=>html5QrCode.clear());
+  }
+  document.getElementById("scanner").style.display="none";
+}
+
+</script>
+
+</body>
+</html>
